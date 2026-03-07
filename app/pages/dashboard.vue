@@ -1,0 +1,155 @@
+<template>
+  <NuxtLayout name="dashboard">
+    <div class="dashboard animate-fade-in">
+      <!-- Stats row -->
+      <div class="grid-4 stats-row">
+        <div class="card stat-card" v-for="stat in stats" :key="stat.label">
+          <div class="stat-card__icon">{{ stat.icon }}</div>
+          <div class="stat-card__value">{{ stat.value }}</div>
+          <div class="stat-card__label">{{ stat.label }}</div>
+          <div class="stat-card__delta" :class="stat.delta > 0 ? 'up' : 'down'">
+            {{ stat.delta > 0 ? '↑' : '↓' }} {{ Math.abs(stat.delta) }}% vs last week
+          </div>
+        </div>
+      </div>
+
+      <!-- Main grid -->
+      <div class="dashboard__grid">
+        <!-- Recent automations -->
+        <div class="card">
+          <div class="section-header">
+            <h3>Active Automations</h3>
+            <NuxtLink to="/automations" class="btn btn-ghost" style="padding: 0.4rem 0.75rem; font-size:0.8rem;">
+              View all →
+            </NuxtLink>
+          </div>
+          <div class="automation-list">
+            <div class="automation-item" v-for="auto in recentAutomations" :key="auto.id">
+              <span class="status-dot" :class="auto.status"></span>
+              <div class="automation-item__info">
+                <span class="automation-item__name">{{ auto.name }}</span>
+                <span class="automation-item__trigger">trigger: {{ auto.trigger }}</span>
+              </div>
+              <span class="badge" :class="auto.status === 'active' ? 'badge-green' : 'badge-orange'">
+                {{ auto.status }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent DM activity -->
+        <div class="card">
+          <div class="section-header">
+            <h3>Recent DM Activity</h3>
+          </div>
+          <div class="activity-feed">
+            <div class="activity-item" v-for="item in activity" :key="item.id">
+              <div class="activity-item__avatar">{{ item.initials }}</div>
+              <div class="activity-item__body">
+                <span class="activity-item__name">{{ item.username }}</span>
+                <span class="activity-item__msg">{{ item.message }}</span>
+              </div>
+              <span class="activity-item__time">{{ item.time }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </NuxtLayout>
+</template>
+
+<script setup lang="ts">
+definePageMeta({ layout: false })
+
+useHead({ title: 'Dashboard — AutoDM' })
+
+const stats = [
+  { icon: '📨', label: 'DMs Sent Today',    value: '1,284', delta:  12.4 },
+  { icon: '👤', label: 'New Followers',      value: '342',   delta:   8.1 },
+  { icon: '💬', label: 'Conversations',      value: '89',    delta:  -2.3 },
+  { icon: '⚡', label: 'Active Rules',       value: '7',     delta:  40.0 },
+]
+
+const recentAutomations = [
+  { id: 1, name: 'Welcome DM',        trigger: 'new follower', status: 'active'  },
+  { id: 2, name: 'Story Reply',       trigger: 'story reply',  status: 'active'  },
+  { id: 3, name: 'Keyword Trigger',   trigger: '"price" DM',   status: 'active'  },
+  { id: 4, name: 'Post Comment Auto', trigger: 'reel comment', status: 'paused'  },
+]
+
+const activity = [
+  { id: 1, initials: 'JD', username: '@johndoe',    message: "What's the price?",    time: '2m ago'  },
+  { id: 2, initials: 'MK', username: '@mary_k',     message: 'Thanks for replying!', time: '8m ago'  },
+  { id: 3, initials: 'AL', username: '@alex_lens',  message: 'DM sent: welcome msg', time: '15m ago' },
+  { id: 4, initials: 'RB', username: '@riya_b',     message: 'Triggered: keyword',   time: '22m ago' },
+  { id: 5, initials: 'TN', username: '@tomn',       message: 'Story reply captured', time: '1h ago'  },
+]
+</script>
+
+<style scoped>
+.stats-row { margin-bottom: 1.5rem; }
+
+.stat-card { display: flex; flex-direction: column; gap: 0.4rem; }
+.stat-card__icon  { font-size: 1.5rem; }
+.stat-card__value { font-size: 2rem; font-weight: 800; font-family: var(--font-display); }
+.stat-card__label { font-size: 0.8rem; color: var(--color-text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+.stat-card__delta { font-size: 0.78rem; }
+.stat-card__delta.up   { color: var(--color-success); }
+.stat-card__delta.down { color: var(--color-danger); }
+
+.dashboard__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+.section-header h3 { font-size: 1rem; }
+
+/* Automation list */
+.automation-list { display: flex; flex-direction: column; gap: 0.75rem; }
+.automation-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: var(--color-surface-2);
+  border-radius: var(--radius-md);
+}
+.automation-item__info { flex: 1; display: flex; flex-direction: column; gap: 0.1rem; }
+.automation-item__name    { font-size: 0.9rem; font-weight: 600; }
+.automation-item__trigger { font-size: 0.78rem; color: var(--color-text-muted); }
+
+/* Activity feed */
+.activity-feed { display: flex; flex-direction: column; gap: 0.75rem; }
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.activity-item__avatar {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--grad-brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+.activity-item__body { flex: 1; display: flex; flex-direction: column; gap: 0.1rem; }
+.activity-item__name { font-size: 0.85rem; font-weight: 600; }
+.activity-item__msg  { font-size: 0.78rem; color: var(--color-text-muted); }
+.activity-item__time { font-size: 0.75rem; color: var(--color-text-faint); white-space: nowrap; }
+
+@media (max-width: 768px) {
+  .dashboard__grid { grid-template-columns: 1fr; }
+}
+</style>
