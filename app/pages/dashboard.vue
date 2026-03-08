@@ -15,7 +15,32 @@
 
       <!-- Main grid -->
       <div class="dashboard__grid">
-        <!-- Recent automations -->
+        <!-- Profile & Recent automations -->
+        <div class="card" v-if="profile">
+          <div class="section-header">
+            <div class="profile-header">
+              <img v-if="profile.profile_picture_url" :src="profile.profile_picture_url" alt="Profile Picture" class="profile-pic" />
+              <div>
+                <h3>{{ profile.name || profile.username }}</h3>
+                <p class="profile-meta">
+                  @{{ profile.username }} • {{ profile.followers_count }} followers • {{ profile.follows_count }} following
+                </p>
+              </div>
+            </div>
+            <p v-if="profile.biography" class="profile-bio">{{ profile.biography }}</p>
+          </div>
+        </div>
+
+        <div class="card" v-else-if="igError">
+          <div class="section-header">
+            <h3>Instagram Disconnected</h3>
+            <button @click="reconnectInstagram" class="btn btn-primary" style="padding: 0.4rem 0.75rem; font-size:0.8rem;">
+              Reconnect →
+            </button>
+          </div>
+          <p style="color:red; font-size: 0.8rem">{{ igError }}</p>
+        </div>
+
         <div class="card">
           <div class="section-header">
             <h3>Active Automations</h3>
@@ -63,6 +88,21 @@ definePageMeta({ layout: false })
 
 useHead({ title: 'Dashboard — AutoDM' })
 
+const user = useSupabaseUser()
+const { profile, loading, error: igError, fetchProfile } = useInstagram()
+
+onMounted(async () => {
+  if (!user.value) {
+    navigateTo('/login')
+  } else {
+    await fetchProfile()
+  }
+})
+
+const reconnectInstagram = () => {
+  navigateTo('/api/auth/instagram/login', { external: true })
+}
+
 const stats = [
   { icon: '📨', label: 'DMs Sent Today',    value: '1,284', delta:  12.4 },
   { icon: '👤', label: 'New Followers',      value: '342',   delta:   8.1 },
@@ -109,7 +149,30 @@ const activity = [
   justify-content: space-between;
   margin-bottom: 1.25rem;
 }
-.section-header h3 { font-size: 1rem; }
+.section-header h3 { font-size: 1rem; margin-bottom: 0.2rem; }
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.profile-pic {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--color-border);
+}
+.profile-meta {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+.profile-bio {
+  font-size: 0.85rem;
+  color: var(--color-text);
+  line-height: 1.4;
+}
 
 /* Automation list */
 .automation-list { display: flex; flex-direction: column; gap: 0.75rem; }

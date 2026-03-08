@@ -1,19 +1,51 @@
 // composables/useInstagram.ts
-// Composable for Instagram-related helpers
 
-export function useInstagram() {
-  const config = useRuntimeConfig()
+export const useInstagram = () => {
+  const profile = useState<any>('ig_profile', () => null)
+  const media = useState<any[]>('ig_media', () => [])
+  const loading = ref(false)
+  const error = ref('')
 
-  /** Kick off the Instagram OAuth flow */
-  function startOAuth() {
-    const params = new URLSearchParams({
-      client_id:     String(config.public.instagramAppId),
-      redirect_uri:  `${config.public.siteUrl}/api/auth/instagram/callback`,
-      scope:         'instagram_business_basic,instagram_business_manage_messages',
-      response_type: 'code',
-    })
-    window.location.href = `https://api.instagram.com/oauth/authorize?${params}`
+  const fetchProfile = async () => {
+    try {
+      loading.value = true
+      error.value = ''
+      profile.value = await $fetch<any>('/api/instagram/me')
+    } catch (e: any) {
+      error.value = e.data?.message || 'Failed to load profile'
+      console.error(e)
+    } finally {
+      loading.value = false
+    }
   }
 
-  return { startOAuth }
+  const fetchMedia = async (afterCursor?: string) => {
+    try {
+      loading.value = true
+      error.value = ''
+      const res: any = await $fetch('/api/instagram/media', {
+        params: afterCursor ? { after: afterCursor } : undefined
+      })
+      if (afterCursor) {
+        media.value = [...media.value, ...(res.data || [])]
+      } else {
+        media.value = res.data || []
+      }
+      return res.paging
+    } catch (e: any) {
+      error.value = e.data?.message || 'Failed to load media'
+      console.error(e)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  return {
+    profile,
+    media,
+    loading,
+    error,
+    fetchProfile,
+    fetchMedia
+  }
 }

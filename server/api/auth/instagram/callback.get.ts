@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
       redirect_uri:  `${config.public.siteUrl}/api/auth/instagram/callback`,
       code:          cleanCode,
     }),
-  }).catch((err) => {
+  }).catch((err: any) => {
     console.error('Meta API Error on short-lived token:', err.data || err)
     throw createError({ statusCode: 400, message: 'Failed to exchange code at Meta' })
   })
@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
       client_secret: String(config.instagramAppSecret),
       access_token: shortAccessToken,
     }
-  }).catch((err) => {
+  }).catch((err: any) => {
     console.error('Meta API Error on long-lived token:', err.data || err)
     throw createError({ statusCode: 400, message: 'Failed to exchange for long-lived token' })
   })

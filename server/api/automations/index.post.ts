@@ -7,14 +7,14 @@ export default defineEventHandler(async (event) => {
   const user = await serverSupabaseUser(event)
   if (!user) throw createError({ statusCode: 401, message: 'Unauthorized' })
 
-  const body = await readBody(event)
+  const body = await readBody<any>(event)
   const { name, trigger, message_template, keywords, delay_seconds } = body
 
   if (!name || !trigger || !message_template) {
     throw createError({ statusCode: 400, message: 'name, trigger, and message_template are required' })
   }
 
-  const client = await serverSupabaseClient(event)
+  const client = await serverSupabaseClient<any>(event)
   const { data, error } = await client
     .from('automations')
     .insert({

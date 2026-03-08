@@ -7,8 +7,8 @@ export default defineEventHandler(async (event) => {
   const user = await serverSupabaseUser(event)
   if (!user) throw createError({ statusCode: 401, message: 'Unauthorized' })
 
-  const id = getRouterParam(event, 'id')
-  const client = await serverSupabaseClient(event)
+  const id = getRouterParam(event, 'id') as string
+  const client = await serverSupabaseClient<any>(event)
 
   const { error } = await client
     .from('automations')
