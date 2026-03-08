@@ -12,7 +12,10 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Missing code' })
   }
 
-  // Exchange code for access token
+  // NOTE: The #_ appended to the end of the redirect URI is not part of the code itself
+  const cleanCode = code.replace('#_', '')
+
+  // Exchange code for access token (Step 2)
   const tokenRes = await $fetch<any>('https://api.instagram.com/oauth/access_token', {
     method: 'POST',
     body: new URLSearchParams({
@@ -20,8 +23,11 @@ export default defineEventHandler(async (event) => {
       client_secret: String(config.instagramAppSecret),
       grant_type:    'authorization_code',
       redirect_uri:  `${config.public.siteUrl}/api/auth/instagram/callback`,
-      code,
+      code:          cleanCode,
     }),
+  }).catch((err) => {
+    console.error('Meta API Error on short-lived token:', err.data || err)
+    throw createError({ statusCode: 400, message: 'Failed to exchange code at Meta' })
   })
 
   // Extract token according to Meta's Business Login response shape
@@ -34,10 +40,18 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Invalid token response from Meta' })
   }
 
-  // Exchange for long-lived token
-  const longLivedRes = await $fetch<any>(
-    `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${config.instagramAppSecret}&access_token=${shortAccessToken}`,
-  )
+  // Exchange for long-lived token (Step 3)
+  const longLivedRes = await $fetch<any>('https://graph.instagram.com/access_token', {
+    method: 'GET',
+    query: {
+      grant_type: 'ig_exchange_token',
+      client_secret: String(config.instagramAppSecret),
+      access_token: shortAccessToken,
+    }
+  }).catch((err) => {
+    console.error('Meta API Error on long-lived token:', err.data || err)
+    throw createError({ statusCode: 400, message: 'Failed to exchange for long-lived token' })
+  })
 
   const longAccessToken = longLivedRes.access_token
   const expiresIn = longLivedRes.expires_in || 5184000 // default to 60 days
