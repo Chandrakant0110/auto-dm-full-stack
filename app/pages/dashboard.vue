@@ -100,7 +100,11 @@ onMounted(async () => {
 })
 
 const reconnectInstagram = () => {
-  navigateTo('/api/auth/instagram/login', { external: true })
+  const config = useRuntimeConfig()
+  const clientId = config.public.instagramAppId
+  const redirectUri = `${config.public.siteUrl}/api/auth/instagram/callback`
+
+  window.location.href = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=1902341750660120&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=instagram_business_basic%2Cinstagram_business_manage_messages%2Cinstagram_business_manage_comments%2Cinstagram_business_content_publish%2Cinstagram_business_manage_insights`
 }
 
 const stats = [

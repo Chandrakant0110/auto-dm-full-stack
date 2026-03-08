@@ -26,8 +26,9 @@ export default defineEventHandler(async (event) => {
       code:          cleanCode,
     }),
   }).catch((err: any) => {
-    console.error('Meta API Error on short-lived token:', err.data || err)
-    throw createError({ statusCode: 400, message: 'Failed to exchange code at Meta' })
+    console.error('Meta Error Details:', err.data || err)
+    const errorMsg = err.data?.error_message || err.data?.error?.message || err.message || 'Unknown'
+    throw createError({ statusCode: 400, message: `Failed to exchange code at Meta: ${errorMsg}` })
   })
 
   // Extract token according to Meta's Business Login response shape
@@ -50,7 +51,8 @@ export default defineEventHandler(async (event) => {
     }
   }).catch((err: any) => {
     console.error('Meta API Error on long-lived token:', err.data || err)
-    throw createError({ statusCode: 400, message: 'Failed to exchange for long-lived token' })
+    const errorMsg = err.data?.error?.message || err.message || 'Unknown'
+    throw createError({ statusCode: 400, message: `Failed to exchange for long-lived token: ${errorMsg}` })
   })
 
   const longAccessToken = longLivedRes.access_token
