@@ -1,85 +1,87 @@
 // server/api/auth/instagram/callback.get.ts
-// GET /api/auth/instagram/callback – handles Instagram OAuth code exchange
-
-import { serverSupabaseClient, serverSupabaseUser } from '#supabase/server'
-
 export default defineEventHandler(async (event) => {
-  const query  = getQuery(event)
-  const code   = query.code as string | undefined
+  const query = getQuery(event)
+  const code = query.code as string | undefined
   const config = useRuntimeConfig()
+  
+  const cleanCode = code ? code.replace('#_', '') : ''
+  const redirectUri = `${config.public.siteUrl}/api/auth/instagram/callback`
 
-  if (!code) {
-    throw createError({ statusCode: 400, message: 'Missing code' })
-  }
+  event.node.res.setHeader('Content-Type', 'text/html')
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Instagram OAuth Debug</title>
+        <style>
+          body { font-family: monospace; margin: 2rem; background: #111; color: #eee; }
+          .container { max-width: 800px; margin: 0 auto; background: #222; padding: 2rem; border-radius: 8px; }
+          input { width: 100%; padding: 8px; margin-bottom: 12px; background: #333; color: white; border: 1px solid #555; }
+          button { padding: 10px 20px; background: #2563eb; color: white; border: none; cursor: pointer; border-radius: 4px; }
+          pre { background: #000; padding: 1rem; overflow-x: auto; white-space: pre-wrap; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h2>Instagram OAuth Debugger</h2>
+          <p>We received the code query parameter from Meta. Review the fields below before attempting to exchange it.</p>
+          
+          <div>
+            <label>Client ID:</label>
+            <input id="client_id" value="${config.public.instagramAppId}" />
+            
+            <label>Client Secret:</label>
+            <input id="client_secret" value="${config.instagramAppSecret}" />
+            
+            <label>Redirect URI (must EXACTLY match the one in Meta app dashboard):</label>
+            <input id="redirect_uri" value="${redirectUri}" />
+            
+            <label>Code (stripped of #_):</label>
+            <input id="code" value="${cleanCode}" />
+            
+            <button id="exchangeBtn">Execute Meta POST Request</button>
+          </div>
 
-  // NOTE: The #_ appended to the end of the redirect URI is not part of the code itself
-  const cleanCode = code.replace('#_', '')
+          <div id="result" style="margin-top: 2rem; display: none;">
+            <h3>Meta Response:</h3>
+            <pre id="resultOutput"></pre>
+          </div>
+        </div>
 
-  // Exchange code for access token (Step 2)
-  const tokenRes = await $fetch<any>('https://api.instagram.com/oauth/access_token', {
-    method: 'POST',
-    body: new URLSearchParams({
-      client_id:     String(config.public.instagramAppId),
-      client_secret: String(config.instagramAppSecret),
-      grant_type:    'authorization_code',
-      redirect_uri:  `${config.public.siteUrl}/api/auth/instagram/callback`,
-      code:          cleanCode,
-    }),
-  }).catch((err: any) => {
-    console.error('Meta Error Details:', err.data || err)
-    const errorMsg = err.data?.error_message || err.data?.error?.message || err.message || 'Unknown'
-    throw createError({ statusCode: 400, message: `Failed to exchange code at Meta: ${errorMsg}` })
-  })
+        <script>
+          document.getElementById('exchangeBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('exchangeBtn');
+            const resultDiv = document.getElementById('result');
+            const resultOutput = document.getElementById('resultOutput');
+            
+            btn.innerText = 'Exchanging...';
+            btn.disabled = true;
+            resultDiv.style.display = 'block';
+            resultOutput.innerText = 'Loading...';
 
-  // Extract token according to Meta's Business Login response shape
-  // Docs indicate the payload might be wrapped in a data[] array
-  const shortAccessToken = tokenRes.data?.[0]?.access_token || tokenRes.access_token
-  const igUserId = tokenRes.data?.[0]?.user_id || tokenRes.user_id
+            try {
+              const res = await fetch('/api/auth/instagram/test-exchange', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  client_id: document.getElementById('client_id').value,
+                  client_secret: document.getElementById('client_secret').value,
+                  redirect_uri: document.getElementById('redirect_uri').value,
+                  code: document.getElementById('code').value,
+                })
+              });
+              
+              const data = await res.json();
+              resultOutput.innerText = JSON.stringify(data, null, 2);
+            } catch (err) {
+              resultOutput.innerText = String(err);
+            }
 
-  if (!shortAccessToken) {
-    console.error('Failed to get short-lived token:', tokenRes)
-    throw createError({ statusCode: 400, message: 'Invalid token response from Meta' })
-  }
-
-  // Exchange for long-lived token (Step 3)
-  const longLivedRes = await $fetch<any>('https://graph.instagram.com/access_token', {
-    method: 'GET',
-    query: {
-      grant_type: 'ig_exchange_token',
-      client_secret: String(config.instagramAppSecret),
-      access_token: shortAccessToken,
-    }
-  }).catch((err: any) => {
-    console.error('Meta API Error on long-lived token:', err.data || err)
-    const errorMsg = err.data?.error?.message || err.message || 'Unknown'
-    throw createError({ statusCode: 400, message: `Failed to exchange for long-lived token: ${errorMsg}` })
-  })
-
-  const longAccessToken = longLivedRes.access_token
-  const expiresIn = longLivedRes.expires_in || 5184000 // default to 60 days
-
-  // Save to Supabase for the logged-in user
-  const user = await serverSupabaseUser(event)
-  if (!user) {
-    // User isn't logged in but they connected Instagram.
-    // Save their Instagram connection data in a secure cookie to be consumed during onboarding.
-    const isProd = process.env.NODE_ENV === 'production'
-    setCookie(event, 'pending_ig_token', longAccessToken, { httpOnly: true, secure: isProd, maxAge: 3600, path: '/' })
-    setCookie(event, 'pending_ig_user_id', igUserId, { httpOnly: true, secure: isProd, maxAge: 3600, path: '/' })
-    setCookie(event, 'pending_ig_expires_in', String(expiresIn), { httpOnly: true, secure: isProd, maxAge: 3600, path: '/' })
-    
-    return sendRedirect(event, '/register?ig=connected')
-  }
-
-  const client = await serverSupabaseClient<any>(event)
-  await client.from('instagram_accounts').upsert({
-    user_id:      user.id,
-    ig_user_id:   igUserId,
-    access_token: longAccessToken,
-    token_type:   longLivedRes.token_type || 'bearer',
-    expires_at:   new Date(Date.now() + expiresIn * 1000).toISOString(),
-    updated_at:   new Date().toISOString(),
-  }, { onConflict: 'user_id' })
-
-  return sendRedirect(event, '/dashboard?ig=connected')
+            btn.innerText = 'Execute Meta POST Request';
+            btn.disabled = false;
+          });
+        </script>
+      </body>
+    </html>
+  `
 })
