@@ -18,6 +18,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     // Server-only
     instagramAppSecret: '',
+    instagramWebhookVerifyToken: '',
     supabaseServiceRoleKey: '',
     redisUrl: '',
     // Public (exposed to client)

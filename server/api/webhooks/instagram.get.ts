@@ -9,7 +9,8 @@ export default defineEventHandler(async (event) => {
   const token     = query['hub.verify_token']
   const challenge = query['hub.challenge']
 
-  const VERIFY_TOKEN = config.instagramAppSecret + '_verify' // set your own token
+  const VERIFY_TOKEN = config.instagramWebhookVerifyToken || config.instagramAppSecret + '_verify'
+
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
     return parseInt(challenge as string)
   }
