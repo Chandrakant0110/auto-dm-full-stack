@@ -52,7 +52,7 @@ export default defineEventHandler(async (event) => {
     setCookie(event, 'pending_ig_user_id', igUserId, { httpOnly: true, secure: isProd, maxAge: 3600, path: '/' })
     setCookie(event, 'pending_ig_expires_in', String(expiresIn), { httpOnly: true, secure: isProd, maxAge: 3600, path: '/' })
     
-    return sendRedirect(event, '/onboarding')
+    return sendRedirect(event, '/register?ig=connected')
   }
 
   const client = await serverSupabaseClient<any>(event)

@@ -79,8 +79,7 @@ async function handleLogin() {
 }
 
 async function handleInstagramOAuth() {
-  // TODO: Redirect to Instagram OAuth flow
-  navigateTo('/api/auth/instagram')
+  window.location.href = '/api/auth/instagram/login'
 }
 </script>
 

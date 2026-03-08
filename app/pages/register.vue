@@ -4,6 +4,10 @@
       <h1 class="register-page__title">Create an account</h1>
       <p class="register-page__sub">Start automating your Instagram DMs in minutes</p>
 
+      <div v-if="route.query.ig === 'connected'" class="ig-success-banner">
+        🎉 Instagram connected successfully! Create your account to save it.
+      </div>
+
       <form class="register-form" @submit.prevent="handleRegister">
         <div class="form-group">
           <label class="form-label">Full Name</label>
@@ -79,6 +83,7 @@ const loading  = ref(false)
 
 const supabase = useSupabaseClient()
 const router   = useRouter()
+const route    = useRoute()
 
 async function handleRegister() {
   if (password.value.length < 8) {
@@ -106,13 +111,19 @@ async function handleRegister() {
     return 
   }
   
-  // Assuming auto-confirm is on for local dev, redirect to dashboard
+  // Account created! Now tie their Instagram account to their new user via the pending cookies
+  try {
+    await $fetch('/api/auth/link-instagram', { method: 'POST' })
+  } catch (linkErr) {
+    console.error('Failed to link Instagram on register:', linkErr)
+  }
+
+  // Redirect to dashboard
   router.push('/dashboard')
 }
 
 async function handleInstagramOAuth() {
-  // TODO: Redirect to Instagram OAuth flow
-  navigateTo('/api/auth/instagram')
+  window.location.href = '/api/auth/instagram/login'
 }
 </script>
 
@@ -186,4 +197,16 @@ async function handleInstagramOAuth() {
 }
 .text-accent { color: var(--color-accent); font-weight: 500; text-decoration: none; transition: opacity var(--transition); }
 .text-accent:hover { opacity: 0.8; }
+
+.ig-success-banner {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--color-success, #10b981);
+  padding: 0.8rem;
+  border-radius: var(--radius-md);
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: -0.5rem;
+}
 </style>

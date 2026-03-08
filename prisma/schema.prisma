@@ -1,0 +1,76 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum PlanName {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  CANCELED
+  PAST_DUE
+}
+
+model User {
+  id                String             @id @db.Uuid // Links to Supabase auth.users.id
+  name              String?
+  email             String             @unique
+  phoneNumber       String?            @map("phone_number")
+  
+  subscription      Subscription?
+  instagramAccount  InstagramAccount?
+  
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Subscription {
+  id                   String             @id @default(uuid()) @db.Uuid
+  userId               String             @unique @map("user_id") @db.Uuid
+  planName             PlanName           @default(FREE) @map("plan_name")
+  status               SubscriptionStatus @default(INACTIVE)
+  
+  subscriptionInitDate DateTime           @default(now()) @map("subscription_init_date") // When they first subscribed
+  startDate            DateTime           @default(now()) @map("start_date")             // Current cycle start
+  durationMonths       Int                @default(1) @map("duration_months")
+  paymentMethod        String?            @map("payment_method")
+  
+  stripeCustomerId     String?            @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
+
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model InstagramAccount {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @unique @map("user_id") @db.Uuid // 1-to-1 relationship with User
+  igUserId          String    @unique @map("ig_user_id")
+  username          String?   @map("username")
+  accessToken       String    @map("access_token")
+  tokenType         String    @default("bearer") @map("token_type")
+  expiresAt         DateTime? @map("expires_at")
+  
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("instagram_accounts")
+}
