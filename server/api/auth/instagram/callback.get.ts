@@ -43,10 +43,16 @@ export default defineEventHandler(async (event) => {
   const expiresIn = longLivedRes.expires_in || 5184000 // default to 60 days
 
   // Save to Supabase for the logged-in user
-  const user   = await serverSupabaseUser(event)
+  const user = await serverSupabaseUser(event)
   if (!user) {
-    // Optionally handle anonymous connecting, or strictly require login before OAuth
-    return sendRedirect(event, '/login')
+    // User isn't logged in but they connected Instagram.
+    // Save their Instagram connection data in a secure cookie to be consumed during onboarding.
+    const isProd = process.env.NODE_ENV === 'production'
+    setCookie(event, 'pending_ig_token', longAccessToken, { httpOnly: true, secure: isProd, maxAge: 3600, path: '/' })
+    setCookie(event, 'pending_ig_user_id', igUserId, { httpOnly: true, secure: isProd, maxAge: 3600, path: '/' })
+    setCookie(event, 'pending_ig_expires_in', String(expiresIn), { httpOnly: true, secure: isProd, maxAge: 3600, path: '/' })
+    
+    return sendRedirect(event, '/onboarding')
   }
 
   const client = await serverSupabaseClient<any>(event)

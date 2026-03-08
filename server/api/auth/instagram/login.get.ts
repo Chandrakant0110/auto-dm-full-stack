@@ -13,11 +13,11 @@ export default defineEventHandler(async (event) => {
     'instagram_business_manage_messages',
     'instagram_business_manage_comments',
     'instagram_business_content_publish',
-    // add 'instagram_business_manage_comments' if you plan to reply to comments later
+    'instagram_business_manage_insights'
   ].join(',')
 
   // Instagram Business Login OAuth URL
-  const authUrl = `https://api.instagram.com/oauth/authorize?enable_fb_login=true&force_reauth=false&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&response_type=code`
+  const authUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}`
 
   return sendRedirect(event, authUrl)
 })
