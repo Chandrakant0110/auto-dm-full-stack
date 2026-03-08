@@ -12,7 +12,8 @@ export default defineEventHandler(async (event) => {
   const VERIFY_TOKEN = config.instagramWebhookVerifyToken || config.instagramAppSecret + '_verify'
 
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    return parseInt(challenge as string)
+    // Return the hub.challenge value as a plain string.
+    return send(event, String(challenge))
   }
 
   throw createError({ statusCode: 403, message: 'Forbidden' })
