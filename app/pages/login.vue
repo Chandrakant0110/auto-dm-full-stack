@@ -65,6 +65,13 @@ const loading  = ref(false)
 
 const supabase = useSupabaseClient()
 const router   = useRouter()
+const route    = useRoute()
+
+onMounted(() => {
+  if (route.query.error) {
+    error.value = route.query.error as string
+  }
+})
 
 async function handleLogin() {
   loading.value = true

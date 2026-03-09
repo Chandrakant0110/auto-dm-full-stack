@@ -1,6 +1,10 @@
 <template>
   <NuxtLayout name="dashboard">
     <div class="dashboard animate-fade-in">
+      <div v-if="successMsg" class="success-banner">
+        {{ successMsg }}
+      </div>
+
       <!-- Stats row -->
       <div class="grid-4 stats-row">
         <div class="card stat-card" v-for="stat in stats" :key="stat.label">
@@ -89,9 +93,20 @@ definePageMeta({ layout: false })
 useHead({ title: 'Dashboard — AutoDM' })
 
 const user = useSupabaseUser()
+const route = useRoute()
 const { profile, loading, error: igError, fetchProfile } = useInstagram()
 
+const successMsg = ref('')
+
 onMounted(async () => {
+  if (route.query.ig === 'connected') {
+    successMsg.value = 'Successfully linked Instagram account!'
+    // remove query param without refreshing
+    const newQuery = { ...route.query }
+    delete newQuery.ig
+    useRouter().replace({ query: newQuery })
+  }
+
   if (!user.value) {
     navigateTo('/login')
   } else {
@@ -131,6 +146,18 @@ const activity = [
 </script>
 
 <style scoped>
+.success-banner {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--color-success);
+  padding: 0.8rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+  font-weight: 500;
+  text-align: center;
+}
+
 .stats-row { margin-bottom: 1.5rem; }
 
 .stat-card { display: flex; flex-direction: column; gap: 0.4rem; }

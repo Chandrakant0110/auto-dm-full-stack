@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
 
   if (!code) {
-    throw createError({ statusCode: 400, message: 'Missing code parameter' })
+    return sendRedirect(event, '/login?error=' + encodeURIComponent('Missing code parameter from Meta'))
   }
 
   // NOTE: The #_ appended to the end of the redirect URI is not part of the code itself
@@ -37,14 +37,22 @@ export default defineEventHandler(async (event) => {
   const tokenRaw = await res.text()
   if (!res.ok) {
     console.error('Meta API Error on short-lived token:', tokenRaw)
-    throw createError({ statusCode: 400, message: `Failed to exchange code at Meta: ${tokenRaw}` })
+    
+    // Attempt to extract the specific error message from Meta
+    let errorMessage = 'Failed to exchange short-lived token at Meta'
+    try {
+      const parsed = JSON.parse(tokenRaw)
+      errorMessage = parsed.error_message || parsed.error?.message || errorMessage
+    } catch(e) {}
+    
+    return sendRedirect(event, '/login?error=' + encodeURIComponent(errorMessage))
   }
 
   let tokenRes: any = {}
   try {
     tokenRes = JSON.parse(tokenRaw)
   } catch (e) {
-    throw createError({ statusCode: 500, message: 'Failed to parse Meta response' })
+    return sendRedirect(event, '/login?error=' + encodeURIComponent('Failed to parse Meta response'))
   }
 
   // Extract token according to Meta's Business Login response shape
@@ -53,7 +61,7 @@ export default defineEventHandler(async (event) => {
 
   if (!shortAccessToken) {
     console.error('Failed to get short-lived token. Missing access_token in:', tokenRes)
-    throw createError({ statusCode: 400, message: 'Invalid token response from Meta (missing access_token)' })
+    return sendRedirect(event, '/login?error=' + encodeURIComponent('Invalid token response from Meta (missing access_token)'))
   }
 
   // -----------------------------------------------------------------------------------
@@ -71,21 +79,28 @@ export default defineEventHandler(async (event) => {
   const longRaw = await longRes.text()
   if (!longRes.ok) {
     console.error('Meta API Error on long-lived token:', longRaw)
-    throw createError({ statusCode: 400, message: `Failed to exchange for long-lived token: ${longRaw}` })
+
+    let errorMessage = 'Failed to exchange for long-lived token'
+    try {
+      const parsed = JSON.parse(longRaw)
+      errorMessage = parsed.error_message || parsed.error?.message || errorMessage
+    } catch(e) {}
+
+    return sendRedirect(event, '/login?error=' + encodeURIComponent(errorMessage))
   }
 
   let longLivedRes: any = {}
   try {
     longLivedRes = JSON.parse(longRaw)
   } catch (e) {
-    throw createError({ statusCode: 500, message: 'Failed to parse Meta long-lived response' })
+    return sendRedirect(event, '/login?error=' + encodeURIComponent('Failed to parse Meta long-lived response'))
   }
 
   const longAccessToken = longLivedRes.access_token
   const expiresIn = longLivedRes.expires_in || 5184000 // default to 60 days
 
   if (!longAccessToken) {
-    throw createError({ statusCode: 400, message: 'Failed to retrieve long lived access_token' })
+    return sendRedirect(event, '/login?error=' + encodeURIComponent('Failed to retrieve long lived access_token'))
   }
 
   // -----------------------------------------------------------------------------------
