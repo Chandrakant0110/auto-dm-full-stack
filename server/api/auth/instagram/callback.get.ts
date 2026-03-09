@@ -1,10 +1,11 @@
-// server/api/auth/instagram/exchange.post.ts
-// POST /api/auth/instagram/exchange – handles Instagram OAuth token exchange async
+// server/api/auth/instagram/callback.get.ts
+// GET /api/auth/instagram/callback – handles Instagram OAuth code exchange
+
 import { serverSupabaseClient, serverSupabaseUser } from '#supabase/server'
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event)
-  const code = body.code as string | undefined
+  const query  = getQuery(event)
+  const code   = query.code as string | undefined
   const config = useRuntimeConfig()
 
   if (!code) {
@@ -99,8 +100,7 @@ export default defineEventHandler(async (event) => {
     setCookie(event, 'pending_ig_user_id', String(igUserId), { httpOnly: true, secure: isProd, maxAge: 3600, path: '/' })
     setCookie(event, 'pending_ig_expires_in', String(expiresIn), { httpOnly: true, secure: isProd, maxAge: 3600, path: '/' })
     
-    // Instead of forcing a 302, tell the async front-end loader to navigate to register
-    return { success: true, redirectTo: '/register?ig=connected' }
+    return sendRedirect(event, '/register?ig=connected')
   }
 
   const client = await serverSupabaseClient<any>(event)
@@ -113,6 +113,5 @@ export default defineEventHandler(async (event) => {
     updated_at:   new Date().toISOString(),
   }, { onConflict: 'user_id' })
 
-  // Instead of forcing a 302, tell the async front-end loader to navigate to dashboard
-  return { success: true, redirectTo: '/dashboard?ig=connected' }
+  return sendRedirect(event, '/dashboard?ig=connected')
 })
