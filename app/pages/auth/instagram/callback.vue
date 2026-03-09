@@ -24,7 +24,7 @@ onMounted(async () => {
 
   try {
     // Call our internal API endpoint to actually do the heavy lifting asynchronously
-    const res = await $fetch('/api/auth/instagram/exchange', {
+    const res = await $fetch<any>('/api/auth/instagram/exchange', {
       method: 'POST',
       body: { code }
     })
