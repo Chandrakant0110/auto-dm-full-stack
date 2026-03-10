@@ -12,6 +12,11 @@ export default defineEventHandler(async (event) => {
     return sendRedirect(event, '/login?error=' + encodeURIComponent('Missing code parameter from Meta'))
   }
 
+  // Extract source context if passed via state parameter
+  // Instagram allows passing a wildcard `state` string that bounces back to us.
+  const stateRaw = query.state as string | undefined
+  const source   = stateRaw === 'dashboard' ? '/dashboard' : '/login'
+
   // NOTE: The #_ appended to the end of the redirect URI is not part of the code itself
   const cleanCode = code.replace('#_', '')
 
@@ -65,68 +70,39 @@ export default defineEventHandler(async (event) => {
   }
 
   // -----------------------------------------------------------------------------------
-  // Step 3: Exchange for long-lived token
+  // Delegate Step 3 (Long-Lived Token Exchange) to a Background Microservice
   // -----------------------------------------------------------------------------------
-  const longParams = new URLSearchParams()
-  longParams.append('grant_type', 'ig_exchange_token')
-  longParams.append('client_secret', String(config.instagramAppSecret))
-  longParams.append('access_token', shortAccessToken)
-
-  const longRes = await fetch(`https://graph.instagram.com/access_token?${longParams.toString()}`, {
-    method: 'GET'
+  
+  const user = await serverSupabaseUser(event)
+  
+  // Asynchronously trigger the background worker without awaiting it entirely
+  // We use the short-lived token generated in Step 2, and the worker upgrades and saves it.
+  $fetch('/api/auth/instagram/background/long-lived', {
+    method: 'POST',
+    body: {
+      shortAccessToken,
+      igUserId,
+      isPending: !user,
+      supabaseUserId: user?.id
+    }
+  }).catch((err) => {
+    console.error('[Callback] Failed to trigger background IG worker:', err)
   })
 
-  const longRaw = await longRes.text()
-  if (!longRes.ok) {
-    console.error('Meta API Error on long-lived token:', longRaw)
-
-    let errorMessage = 'Failed to exchange for long-lived token'
-    try {
-      const parsed = JSON.parse(longRaw)
-      errorMessage = parsed.error_message || parsed.error?.message || errorMessage
-    } catch(e) {}
-
-    return sendRedirect(event, '/login?error=' + encodeURIComponent(errorMessage))
-  }
-
-  let longLivedRes: any = {}
-  try {
-    longLivedRes = JSON.parse(longRaw)
-  } catch (e) {
-    return sendRedirect(event, '/login?error=' + encodeURIComponent('Failed to parse Meta long-lived response'))
-  }
-
-  const longAccessToken = longLivedRes.access_token
-  const expiresIn = longLivedRes.expires_in || 5184000 // default to 60 days
-
-  if (!longAccessToken) {
-    return sendRedirect(event, '/login?error=' + encodeURIComponent('Failed to retrieve long lived access_token'))
-  }
-
   // -----------------------------------------------------------------------------------
-  // Save to Supabase for the logged-in user
+  // Fast Client Redirect
   // -----------------------------------------------------------------------------------
-  const user = await serverSupabaseUser(event)
   if (!user) {
-    // User isn't logged in but they connected Instagram.
-    // Save their Instagram connection data in a secure cookie to be consumed during onboarding.
+    // User isn't logged in but they connected Instagram from the login page.
+    // Save short-lived auth into cookies so they can be upgraded during actual registration.
     const isProd = process.env.NODE_ENV === 'production'
-    setCookie(event, 'pending_ig_token', longAccessToken, { httpOnly: true, secure: isProd, maxAge: 3600, path: '/' })
+    setCookie(event, 'pending_ig_token', shortAccessToken, { httpOnly: true, secure: isProd, maxAge: 3600, path: '/' })
     setCookie(event, 'pending_ig_user_id', String(igUserId), { httpOnly: true, secure: isProd, maxAge: 3600, path: '/' })
-    setCookie(event, 'pending_ig_expires_in', String(expiresIn), { httpOnly: true, secure: isProd, maxAge: 3600, path: '/' })
     
     return sendRedirect(event, '/register?ig=connected')
   }
 
-  const client = await serverSupabaseClient<any>(event)
-  await client.from('instagram_accounts').upsert({
-    user_id:      user.id,
-    ig_user_id:   String(igUserId),
-    access_token: longAccessToken,
-    token_type:   longLivedRes.token_type || 'bearer',
-    expires_at:   new Date(Date.now() + expiresIn * 1000).toISOString(),
-    updated_at:   new Date().toISOString(),
-  }, { onConflict: 'user_id' })
-
-  return sendRedirect(event, '/dashboard?ig=connected')
+  // If they initiated from the dashboard, bounce them right back instantly.
+  // The background worker is already generating the 60-day token and writing it to the database behind the scenes.
+  return sendRedirect(event, `${source}?ig=connected`)
 })
