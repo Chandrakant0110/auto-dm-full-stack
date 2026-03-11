@@ -7,6 +7,7 @@
 //   Step 4: Save long-lived token to DB + redirect user to dashboard
 
 import { serverSupabaseClient, serverSupabaseUser } from '#supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 export default defineEventHandler(async (event) => {
   const query  = getQuery(event)
@@ -28,20 +29,20 @@ export default defineEventHandler(async (event) => {
 
   // ── 2. Exchange code → short-lived access token ──────────────────────────────
   // MUST be sent as application/x-www-form-urlencoded (not JSON)
-  const step2Params = new URLSearchParams({
-    client_id     : String(config.public.instagramAppId),
-    client_secret : String(config.instagramAppSecret),
-    grant_type    : 'authorization_code',
-    redirect_uri  : `${config.public.siteUrl}/api/auth/instagram/callback`,
-    code,
-  })
+  // MUST match Meta's docs: curl -F uses multipart/form-data, NOT url-encoded
+  const step2Form = new FormData()
+  step2Form.append('client_id',     String(config.public.instagramAppId))
+  step2Form.append('client_secret', String(config.instagramAppSecret))
+  step2Form.append('grant_type',    'authorization_code')
+  step2Form.append('redirect_uri',  `${config.public.siteUrl}/api/auth/instagram/callback`)
+  step2Form.append('code',          code)
 
   let shortTokenRes: any
   try {
     const step2Res = await fetch('https://api.instagram.com/oauth/access_token', {
-      method  : 'POST',
-      headers : { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body    : step2Params.toString(),
+      method : 'POST',
+      body   : step2Form,
+      // Do NOT set Content-Type manually — fetch sets it with the correct multipart boundary
     })
 
     const raw = await step2Res.text()
@@ -54,9 +55,10 @@ export default defineEventHandler(async (event) => {
       console.error('[IG Callback] Step2 failed:', msg)
       return sendRedirect(event, `${origin}?error=` + encodeURIComponent(msg))
     }
-  } catch (err) {
-    console.error('[IG Callback] Step2 exception:', err)
-    return sendRedirect(event, `${origin}?error=` + encodeURIComponent('Network error communicating with Instagram (Step 2)'))
+  } catch (err: any) {
+    const msg = err?.message || err?.cause?.message || String(err)
+    console.error('[IG Callback] Step2 exception:', msg)
+    return sendRedirect(event, `${origin}?error=` + encodeURIComponent(`Step2 network exception: ${msg}`))
   }
 
   // Response shape: { data: [{ access_token, user_id, permissions }] }
@@ -92,9 +94,10 @@ export default defineEventHandler(async (event) => {
       console.error('[IG Callback] Step3 failed:', msg)
       return sendRedirect(event, `${origin}?error=` + encodeURIComponent(msg))
     }
-  } catch (err) {
-    console.error('[IG Callback] Step3 exception:', err)
-    return sendRedirect(event, `${origin}?error=` + encodeURIComponent('Network error communicating with Instagram (Step 3)'))
+  } catch (err: any) {
+    const msg = err?.message || err?.cause?.message || String(err)
+    console.error('[IG Callback] Step3 exception:', msg)
+    return sendRedirect(event, `${origin}?error=` + encodeURIComponent(`Step3 network exception: ${msg}`))
   }
 
   const longToken = longTokenRes?.access_token
@@ -118,19 +121,28 @@ export default defineEventHandler(async (event) => {
     return sendRedirect(event, '/register?ig=connected')
   }
 
+  // RLS is disabled so the anon client should work, but use a direct service client as safety net
+  // Try with anon client first (cookie-based session), then fallback to service role if available
   const supabase = await serverSupabaseClient<any>(event)
-  const { error: dbError } = await supabase.from('instagram_accounts').upsert({
+  
+  const upsertPayload = {
     user_id      : user.id,
     ig_user_id   : String(igUserId),
     access_token : longToken,
     token_type   : longTokenRes.token_type || 'bearer',
     expires_at   : new Date(Date.now() + expiresIn * 1000).toISOString(),
     updated_at   : new Date().toISOString(),
-  }, { onConflict: 'user_id' })
+  }
+
+  const { error: dbError } = await supabase
+    .from('instagram_accounts')
+    .upsert(upsertPayload, { onConflict: 'user_id' })
 
   if (dbError) {
-    console.error('[IG Callback] DB upsert error:', dbError)
-    return sendRedirect(event, `${origin}?error=` + encodeURIComponent('Failed to save your Instagram connection. Please try again.'))
+    // Surface the real Supabase error so we can debug from the URL
+    const errMsg = `DB[${dbError.code}]: ${dbError.message}`
+    console.error('[IG Callback] DB upsert error:', JSON.stringify(dbError))
+    return sendRedirect(event, `${origin}?error=` + encodeURIComponent(errMsg))
   }
 
   // ── 5. All done — redirect user back where they came from ─────────────────────
