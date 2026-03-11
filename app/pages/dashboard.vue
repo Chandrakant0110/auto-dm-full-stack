@@ -1,10 +1,8 @@
 <template>
   <NuxtLayout name="dashboard">
     <div class="dashboard animate-fade-in">
-      <div v-if="successMsg" class="success-banner">
-        {{ successMsg }}
-      </div>
-
+      <div v-if="successMsg" class="success-banner">{{ successMsg }}</div>
+      <div v-if="errorMsg" class="error-banner">{{ errorMsg }}</div>
       <!-- Stats row -->
       <div class="grid-4 stats-row">
         <div class="card stat-card" v-for="stat in stats" :key="stat.label">
@@ -97,21 +95,39 @@ const route = useRoute()
 const { profile, loading, error: igError, fetchProfile } = useInstagram()
 
 const successMsg = ref('')
+const errorMsg   = ref('')
 
 onMounted(async () => {
-  if (route.query.ig === 'connected') {
-    successMsg.value = 'Successfully linked Instagram account!'
-    // remove query param without refreshing
-    const newQuery = { ...route.query }
-    delete newQuery.ig
-    useRouter().replace({ query: newQuery })
+  if (!user.value) {
+    return navigateTo('/login')
   }
 
-  if (!user.value) {
-    navigateTo('/login')
-  } else {
-    await fetchProfile()
+  const ig = route.query.ig as string | undefined
+
+  if (ig === 'pending') {
+    // Token is in httpOnly cookie — call link-instagram to claim it with proper auth
+    useRouter().replace({ query: {} }) // clean up URL
+    try {
+      const res = await $fetch<{ linked: boolean; message?: string }>('/api/auth/link-instagram', {
+        method: 'POST',
+      })
+      if (res.linked) {
+        successMsg.value = '✅ Instagram account connected successfully!'
+      } else {
+        errorMsg.value = res.message || 'No pending Instagram connection found.'
+      }
+    } catch (err: any) {
+      errorMsg.value = err?.data?.message || err?.message || 'Failed to link Instagram. Please try again.'
+    }
+  } else if (ig === 'connected') {
+    successMsg.value = '✅ Instagram account connected successfully!'
+    useRouter().replace({ query: {} })
+  } else if (route.query.error) {
+    errorMsg.value = route.query.error as string
+    useRouter().replace({ query: {} })
   }
+
+  await fetchProfile()
 })
 
 const reconnectInstagram = () => {

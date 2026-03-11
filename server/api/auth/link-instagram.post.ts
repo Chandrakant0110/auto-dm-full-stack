@@ -33,7 +33,8 @@ export default defineEventHandler(async (event) => {
 
   if (error) {
     console.error('Failed to link IG account:', error)
-    throw createError({ statusCode: 500, message: 'Failed to link Instagram account.' })
+    const msg = `DB[${error.code}]: ${error.message}`
+    throw createError({ statusCode: 500, message: msg })
   }
 
   // Clear HTTP-Only cookies now that they're saved
